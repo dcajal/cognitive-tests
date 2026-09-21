@@ -28,6 +28,13 @@ class StroopTest {
   /// Whether to enable audio recording
   final bool enableAudioRecording;
 
+  /// Supplies the full output path for the WAV file when recording starts.
+  ///
+  /// The caller chooses the directory and filename and must create the parent
+  /// directory. Called once per startTest, only when audio recording is enabled.
+  /// If omitted, a timestamped WAV is saved in the application documents directory.
+  final Future<String> Function()? audioPathProvider;
+
   /// Number of items per page (words or color patches). Default 100.
   final int itemCount;
 
@@ -41,6 +48,7 @@ class StroopTest {
   StroopTest({
     this.resultHandler,
     this.enableAudioRecording = true,
+    this.audioPathProvider,
     this.itemCount = 100,
     this.language = StroopLanguage.english,
     Random? random,
@@ -92,15 +100,24 @@ class StroopTest {
 
   /// Helper method to setup audio recording file
   Future<void> _setupAudioFile(DateTime dt) async {
-    audioFileName = sprintf(
-      '%02i%02i%02i_%02i%02i%02i_stresstest_stroopaudio.wav',
-      [dt.year % 100, dt.month, dt.day, dt.hour, dt.minute, dt.second],
-    );
-
-    final directory = await getApplicationDocumentsDirectory();
-    final pathWav = "${directory.path}/$audioFileName";
+    final provider = audioPathProvider;
+    final String pathWav;
+    if (provider != null) {
+      pathWav = await provider();
+      if (pathWav.trim().isEmpty) {
+        throw ArgumentError.value(pathWav, 'audioPathProvider',
+            'Must return a non-empty WAV file path');
+      }
+    } else {
+      final filename = sprintf(
+        '%02i%02i%02i_%02i%02i%02i_stresstest_stroopaudio.wav',
+        [dt.year % 100, dt.month, dt.day, dt.hour, dt.minute, dt.second],
+      );
+      final directory = await getApplicationDocumentsDirectory();
+      pathWav = '${directory.path}/$filename';
+    }
     audioFile = await File(pathWav).create();
-
+    audioFileName = audioFile!.uri.pathSegments.last;
     debugPrint('Saving audio file to: $pathWav');
   }
 
@@ -159,8 +176,7 @@ class StroopTest {
 
     if (enableAudioRecording) {
       await _setupAudioFile(dt);
-      await _startAudioRecording(
-          "${(await getApplicationDocumentsDirectory()).path}/$audioFileName");
+      await _startAudioRecording(audioFile!.path);
     } else {
       debugPrint('Audio recording disabled - timestamps will not be saved');
     }

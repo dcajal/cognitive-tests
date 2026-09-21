@@ -99,6 +99,29 @@ class MyTestResultHandler implements TestResultHandler {
 }
 ```
 
+### Choosing the Stroop audio location
+
+Pass `audioPathProvider` to let your application choose the full WAV path:
+
+```dart
+final test = StroopTest(
+  audioPathProvider: () async {
+    final directory = await getApplicationDocumentsDirectory();
+    final recordings = await Directory('${directory.path}/recordings')
+        .create(recursive: true);
+    return '${recordings.path}/${DateTime.now().millisecondsSinceEpoch}_stroop.wav';
+  },
+);
+```
+
+This example also needs `dart:io` and `package:path_provider/path_provider.dart`.
+The callback runs once when `startTest()` starts audio recording. Create the
+parent directory before returning the path. The recorder writes directly to
+that path, and `StroopTestResult.audioFile` and `audioFilename` refer to it.
+Callback and file creation errors propagate to the caller of `startTest()`.
+When audio recording is disabled, the callback is not called. Without a callback,
+the existing timestamped filename in the application documents directory is used.
+
 ## Language Support
 
 The Stroop Test supports multilanguages, covering the most spoken languages worldwide.
