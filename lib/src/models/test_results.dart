@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'stroop_languages.dart';
+import 'stroop_sequence.dart';
 
 /// Base class for all cognitive test results
 abstract class TestResult {
@@ -19,13 +21,20 @@ class StroopTestResult extends TestResult {
   final List<int> timestamps;
   final bool audioRecordingEnabled;
 
+  /// Original sequence, stored once rather than duplicating the three pages.
+  final List<StroopSequenceEntry> sequence;
+  final StroopLanguage language;
+
   StroopTestResult({
     required this.audioFile,
     required this.audioFilename,
     required this.timestamps,
     required this.audioRecordingEnabled,
     required super.testDate,
-  }) : super(testType: 'stroop');
+    List<StroopSequenceEntry> sequence = const [],
+    this.language = StroopLanguage.english,
+  })  : sequence = List.unmodifiable(sequence),
+        super(testType: 'stroop');
 
   /// Duration of the test in milliseconds
   int get testDuration =>

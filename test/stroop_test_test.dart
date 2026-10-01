@@ -7,6 +7,80 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('StroopTest Logic Tests', () {
+    test('original sequence reconstructs all pages in every language',
+        () async {
+      const colors = [Colors.red, Colors.green, Colors.blue];
+      for (final language in StroopLanguage.values) {
+        final stroop = StroopTest(
+          enableAudioRecording: false,
+          itemCount: 100,
+          language: language,
+          random: Random(42),
+        );
+        await stroop.initialize();
+        final words = StroopLanguageWords.getWordsForLanguage(language);
+
+        expect(stroop.sequence, hasLength(100));
+        for (var i = 0; i < stroop.sequence.length; i++) {
+          final entry = stroop.sequence[i];
+          expect(stroop.page0Words[i].text, words[entry.wordIndex]);
+          expect(stroop.page0Words[i].color, Colors.black);
+          expect(stroop.page1Colors[i].text, isNull);
+          expect(stroop.page1Colors[i].color, colors[entry.colorIndex]);
+          expect(stroop.page2Words[i].text, words[entry.wordIndex]);
+          expect(stroop.page2Words[i].color, colors[entry.colorIndex]);
+        }
+        expect(() => stroop.sequence.clear(), throwsUnsupportedError);
+        await stroop.dispose();
+      }
+    });
+
+    test('result keeps an immutable snapshot of the supplied sequence', () {
+      final source = <StroopSequenceEntry>[
+        (wordIndex: 0, colorIndex: 1),
+      ];
+      final result = StroopTestResult(
+        audioFile: null,
+        audioFilename: null,
+        timestamps: [],
+        audioRecordingEnabled: false,
+        testDate: DateTime(2026),
+        sequence: source,
+        language: StroopLanguage.spanish,
+      );
+      source.clear();
+      expect(result.sequence, [(wordIndex: 0, colorIndex: 1)]);
+      expect(() => result.sequence.clear(), throwsUnsupportedError);
+    });
+
+    testWidgets('finish delivers the generated sequence and language unchanged',
+        (tester) async {
+      final handler = _CapturingResultHandler();
+      final stroop = StroopTest(
+        enableAudioRecording: false,
+        resultHandler: handler,
+        language: StroopLanguage.spanish,
+        random: Random(42),
+      );
+      await stroop.initialize();
+      final original = List<StroopSequenceEntry>.of(stroop.sequence);
+      late BuildContext context;
+      await tester.pumpWidget(MaterialApp(home: Builder(builder: (value) {
+        context = value;
+        return const SizedBox.shrink();
+      })));
+      await stroop.startTest();
+      stroop.goToNextPage();
+      stroop.goToNextPage();
+      await stroop.finishTest(context);
+
+      expect(handler.result!.sequence, original);
+      expect(handler.result!.language, StroopLanguage.spanish);
+      expect(handler.result!.timestamps, isEmpty);
+      expect(handler.result!.audioRecordingEnabled, isFalse);
+      await stroop.dispose();
+    });
+
     test('should generate items without errors', () {
       final test = StroopTest(
         enableAudioRecording: false,
@@ -129,4 +203,18 @@ void main() {
       expect(test.testPage, equals(2));
     });
   });
+}
+
+class _CapturingResultHandler implements TestResultHandler {
+  StroopTestResult? result;
+
+  @override
+  Future<void> handleStroopTestResults(
+      BuildContext context, StroopTestResult result) async {
+    this.result = result;
+  }
+
+  @override
+  Future<void> handleTrailMakingTestResults(
+      BuildContext context, TrailMakingTestResult result) async {}
 }

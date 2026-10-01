@@ -10,6 +10,7 @@ import 'package:sprintf/sprintf.dart';
 import '../interfaces/test_result_handler.dart';
 import '../models/test_results.dart';
 import '../models/stroop_languages.dart';
+import '../models/stroop_sequence.dart';
 
 /// StroopTest - Stroop cognitive test
 ///
@@ -55,11 +56,14 @@ class StroopTest {
   }) : _rng = random ?? Random();
 
   /// Stroop Data
+  late final List<StroopSequenceEntry> _sequence;
   late final List<StroopItem> _page0Words; // Congruent words in black ink
   late final List<StroopItem> _page1Colors; // Color patches only
   late final List<StroopItem> _page2Words; // Incongruent word-color pairs
 
   /// Public getters
+  /// Original word-color pairs in presentation order, available after initialize.
+  List<StroopSequenceEntry> get sequence => _sequence;
   List<StroopItem> get page0Words => _page0Words;
   List<StroopItem> get page1Colors => _page1Colors;
   List<StroopItem> get page2Words => _page2Words;
@@ -201,6 +205,8 @@ class StroopTest {
         timestamps: timestamps,
         audioRecordingEnabled: enableAudioRecording,
         testDate: DateTime.now(),
+        sequence: _sequence,
+        language: language,
       );
 
       if (context.mounted) {
@@ -214,20 +220,23 @@ class StroopTest {
     const colors = [Colors.red, Colors.green, Colors.blue];
     final words = _getWordsForLanguage();
 
-    final items = _generateStroopSequence(words.length, itemCount);
+    _sequence =
+        List.unmodifiable(_generateStroopSequence(words.length, itemCount));
 
     // Page 0: Words in black ink
-    _page0Words = items
-        .map((item) => StroopItem.word(words[item.$1], Colors.black))
+    _page0Words = _sequence
+        .map((item) => StroopItem.word(words[item.wordIndex], Colors.black))
         .toList();
 
     // Page 1: Color patches only
-    _page1Colors =
-        items.map((item) => StroopItem.colorOnly(colors[item.$2])).toList();
+    _page1Colors = _sequence
+        .map((item) => StroopItem.colorOnly(colors[item.colorIndex]))
+        .toList();
 
     // Page 2: Incongruent word-color pairs
-    _page2Words = items
-        .map((item) => StroopItem.word(words[item.$1], colors[item.$2]))
+    _page2Words = _sequence
+        .map((item) =>
+            StroopItem.word(words[item.wordIndex], colors[item.colorIndex]))
         .toList();
   }
 
@@ -235,12 +244,11 @@ class StroopTest {
   /// - No consecutive identical words
   /// - No consecutive identical colors
   /// - Word and color are never congruent (same index)
-  List<(int wordIdx, int colorIdx)> _generateStroopSequence(
-      int wordCount, int length) {
-    if (length <= 0) return const <(int, int)>[];
+  List<StroopSequenceEntry> _generateStroopSequence(int wordCount, int length) {
+    if (length <= 0) return const <StroopSequenceEntry>[];
 
     const colorCount = 3; // red, green, blue
-    final sequence = <(int, int)>[];
+    final sequence = <StroopSequenceEntry>[];
     int? lastWordIdx;
     int? lastColorIdx;
 
@@ -278,7 +286,7 @@ class StroopTest {
         colorIdx = availableColors[_rng.nextInt(availableColors.length)];
       }
 
-      sequence.add((wordIdx, colorIdx));
+      sequence.add((wordIndex: wordIdx, colorIndex: colorIdx));
       lastWordIdx = wordIdx;
       lastColorIdx = colorIdx;
     }
