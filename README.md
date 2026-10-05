@@ -14,6 +14,7 @@ A Flutter library for implementing and managing cognitive tests commonly used in
   - Page transition monitoring
   - Configurable audio recording settings
   - Dynamic generation
+  - Immutable source sequence included in results for later reconstruction and scoring
   - Configurable number of items per page
   - Multi-language support for color words
 
@@ -82,6 +83,8 @@ class MyTestResultHandler implements TestResultHandler {
     // Save or upload results as needed
     // Access audio file: result.audioFile
     // Access timestamps: result.timestamps
+    // Access source pairs: result.sequence
+    // Access displayed language: result.language
   }
 
   @override
@@ -122,6 +125,42 @@ Callback and file creation errors propagate to the caller of `startTest()`.
 When audio recording is disabled, the callback is not called. Without a callback,
 the existing timestamped filename in the application documents directory is used.
 
+### Saving the original Stroop sequence
+
+After `await test.initialize()`, `test.sequence` contains the original ordered
+word/color pairs. The same sequence and the selected language are passed to
+`handleStroopTestResults` as `result.sequence` and `result.language`, including
+when audio recording is disabled.
+
+Each `StroopSequenceEntry` is a Dart record with `wordIndex` and `colorIndex`.
+Both indices use the fixed mapping `0 = red`, `1 = green`, `2 = blue`.
+The list position defines presentation order. The sequence is immutable, and
+results retain an immutable snapshot of the supplied pairs.
+
+```dart
+final words = StroopLanguageWords.getWordsForLanguage(result.language);
+const colorNames = ['red', 'green', 'blue'];
+
+for (final entry in result.sequence) {
+  final word = words[entry.wordIndex];
+  final color = colorNames[entry.colorIndex];
+  // Page 1: display `word` in black; the expected response is the word.
+  // Page 2: display a color patch of `color`; the expected response is the color.
+  // Page 3: display `word` in `color`; the expected response is the ink color.
+}
+```
+
+For later processing, store the sequence once together with its language and
+the existing page-level timestamps; all three pages can be reconstructed from
+these data. No per-item timestamps or automatic response scoring are provided.
+Recording uses mono WAV at 16,000 Hz; recording timestamps mark the start, page
+transitions, and end when audio is enabled. With audio disabled, the sequence
+is still available but timestamps remain empty.
+
+Existing code constructing `StroopTestResult` remains compatible: `sequence`
+defaults to an empty list and `language` to English. An empty sequence cannot
+reconstruct the original presentation.
+
 ## Language Support
 
 The Stroop Test supports multilanguages, covering the most spoken languages worldwide.
@@ -134,7 +173,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ### Issues
 
-If you encounter any issues or have feature requests, please file them on the [GitHub repository](https://github.com/dcajal/cognitive_tests/issues).
+If you encounter any issues or have feature requests, please file them on the [GitHub repository](https://github.com/dcajal/cognitive-tests/issues).
 
 ### License
 
